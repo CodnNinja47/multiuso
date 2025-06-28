@@ -263,7 +263,6 @@ def buscar_numero(numero):
             "formato_nacional": phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.NATIONAL),
             "formato_internacional": phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.INTERNATIONAL),
             "fecha_consulta": datetime.datetime.now().isoformat(),
-            "nota": "Información limitada sin APIs externas"
         }
         
         return info
