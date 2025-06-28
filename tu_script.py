@@ -7,6 +7,8 @@ import datetime
 import re
 import phonenumbers
 from phonenumbers import carrier, geocoder, timezone
+import time  # Añadido para el sleep
+from functools import lru_cache  # Añadido para el caché
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -34,6 +36,11 @@ PLATFORMS = {
 
 TIMEOUT = 15
 MAX_RESULTS = 30
+
+# Versión con caché de la función buscar_ip
+@lru_cache(maxsize=100)
+def buscar_ip_cached(ip):
+    return buscar_ip(ip)
 
 def buscar(usuario):
     variations = generate_username_variations(usuario)
@@ -184,7 +191,7 @@ def buscar_ip(ip):
             if res.status_code == 429:
                 return {
                     "error": "Límite de solicitudes alcanzado",
-                    "solucion": "Espere 60 segundos o registrese en ipapi.co para una clave API",
+                    "solucion": "Espere 60 segundos o regístrese en ipapi.co para una clave API",
                     "detalles": "Plan gratuito permite 1,000 solicitudes/día (30/min)"
                 }
             
