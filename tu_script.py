@@ -160,68 +160,68 @@ def create_result_hash(title, url):
     return hashlib.md5(f"{title}{url}".encode()).hexdigest()
 
 def buscar_ip(ip):
-    """Obtiene información detallada de una dirección IP usando APIs gratuitas"""
+    """Obtiene información detallada de una dirección IP usando ipapi.co"""
     try:
         # Verificar si la IP es válida
         if not re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', ip):
             return {"error": "Formato de IP inválido"}
         
-        # Consultar múltiples APIs para obtener información completa
-        results = {}
         headers = {'User-Agent': random.choice(USER_AGENTS)}
         
-        # Primera API (ipapi.co)
+        # Consultar ipapi.co
         try:
             res = requests.get(f"https://ipapi.co/{ip}/json/", headers=headers, timeout=TIMEOUT)
             res.raise_for_status()
-            ipapi_data = res.json()
+            ip_data = res.json()
             
-            if not ipapi_data.get("error"):
-                results.update({
-                    "ip": ip,
-                    "pais": ipapi_data.get("country_name"),
-                    "region": ipapi_data.get("region"),
-                    "ciudad": ipapi_data.get("city"),
-                    "codigo_postal": ipapi_data.get("postal"),
-                    "zona_horaria": ipapi_data.get("timezone"),
-                    "proveedor": ipapi_data.get("org"),
-                    "asn": ipapi_data.get("asn"),
-                    "latitud": ipapi_data.get("latitude"),
-                    "longitud": ipapi_data.get("longitude"),
-                    "fuente": "ipapi.co"
-                })
-        except Exception as e:
-            print(f"Error con ipapi.co: {str(e)}")
-        
-        # Segunda API (ip-api.com) si la primera no tuvo todos los datos
-        if not results.get("pais"):
-            try:
-                res = requests.get(f"http://ip-api.com/json/{ip}", headers=headers, timeout=TIMEOUT)
-                res.raise_for_status()
-                ipapi_data = res.json()
-                
-                if ipapi_data.get("status") == "success":
-                    results.update({
-                        "pais": ipapi_data.get("country"),
-                        "region": ipapi_data.get("regionName"),
-                        "ciudad": ipapi_data.get("city"),
-                        "isp": ipapi_data.get("isp"),
-                        "fuente": "ip-api.com"
-                    })
-            except Exception as e:
-                print(f"Error con ip-api.com: {str(e)}")
-        
-        # Si no se obtuvo información de ninguna API
-        if not results:
-            return {"error": "No se pudo obtener información de la IP"}
-        
-        # Agregar fecha y hora de la consulta
-        results["fecha_consulta"] = datetime.datetime.now().isoformat()
-        
-        return results
+            if ip_data.get("error"):
+                return {"error": ip_data.get("reason", "Error al obtener información de la IP")}
+            
+            # Construir respuesta con todos los campos disponibles
+            results = {
+                "ip": ip_data.get("ip"),
+                "network": ip_data.get("network"),
+                "version": ip_data.get("version"),
+                "city": ip_data.get("city"),
+                "region": ip_data.get("region"),
+                "region_code": ip_data.get("region_code"),
+                "country": ip_data.get("country"),
+                "country_name": ip_data.get("country_name"),
+                "country_code": ip_data.get("country_code"),
+                "country_code_iso3": ip_data.get("country_code_iso3"),
+                "country_capital": ip_data.get("country_capital"),
+                "country_tld": ip_data.get("country_tld"),
+                "continent_code": ip_data.get("continent_code"),
+                "in_eu": ip_data.get("in_eu"),
+                "postal": ip_data.get("postal"),
+                "latitude": ip_data.get("latitude"),
+                "longitude": ip_data.get("longitude"),
+                "timezone": ip_data.get("timezone"),
+                "utc_offset": ip_data.get("utc_offset"),
+                "country_calling_code": ip_data.get("country_calling_code"),
+                "currency": ip_data.get("currency"),
+                "currency_name": ip_data.get("currency_name"),
+                "languages": ip_data.get("languages"),
+                "country_area": ip_data.get("country_area"),
+                "country_population": ip_data.get("country_population"),
+                "asn": ip_data.get("asn"),
+                "org": ip_data.get("org"),
+                "fecha_consulta": datetime.datetime.now().isoformat(),
+                "fuente": "ipapi.co"
+            }
+            
+            # Eliminar campos que son None
+            results = {k: v for k, v in results.items() if v is not None}
+            
+            return results
+            
+        except requests.exceptions.RequestException as e:
+            return {"error": f"Error al conectar con ipapi.co: {str(e)}"}
+        except ValueError as e:
+            return {"error": f"Error al decodificar la respuesta de ipapi.co: {str(e)}"}
     
     except Exception as e:
-        return {"error": f"Error al buscar información de la IP: {str(e)}"}
+        return {"error": f"Error inesperado al buscar información de la IP: {str(e)}"}
 
 def buscar_numero(numero):
     """Obtiene información de un número de teléfono sin usar APIs externas"""
