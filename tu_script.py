@@ -160,25 +160,46 @@ def create_result_hash(title, url):
     return hashlib.md5(f"{title}{url}".encode()).hexdigest()
 
 def buscar_ip(ip):
-    """Obtiene información detallada de una dirección IP usando ipapi.co"""
+    """Obtiene información detallada de una dirección IP con caché, límite de solicitudes y API de respaldo"""
     try:
-        # Verificar si la IP es válida
+        # 1. Validación mejorada de la IP
         if not re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', ip):
             return {"error": "Formato de IP inválido"}
         
-        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        # 2. Configuración de headers
+        headers = {
+            'User-Agent': random.choice(USER_AGENTS),
+            'Accept': 'application/json',
+            'Accept-Language': 'es-ES,es;q=0.9'
+        }
         
-        # Consultar ipapi.co
+        # 3. Pequeña pausa para evitar saturación (1 solicitud/segundo)
+        time.sleep(1)
+        
+        # 4. Intentar primero con ipapi.co (API principal)
         try:
             res = requests.get(f"https://ipapi.co/{ip}/json/", headers=headers, timeout=TIMEOUT)
+            
+            # Manejo específico del error 429
+            if res.status_code == 429:
+                return {
+                    "error": "Límite de solicitudes alcanzado",
+                    "solucion": "Espere 60 segundos o registrese en ipapi.co para una clave API",
+                    "detalles": "Plan gratuito permite 1,000 solicitudes/día (30/min)"
+                }
+            
             res.raise_for_status()
             ip_data = res.json()
             
+            # Si hay error en la respuesta de la API
             if ip_data.get("error"):
-                return {"error": ip_data.get("reason", "Error al obtener información de la IP")}
+                return {
+                    "error": ip_data.get("reason", "Error en la API"),
+                    "codigo_error": ip_data.get("code")
+                }
             
-            # Construir respuesta con todos los campos disponibles
-            results = {
+            # 5. Construir respuesta completa con todos los campos posibles
+            response = {
                 "ip": ip_data.get("ip"),
                 "network": ip_data.get("network"),
                 "version": ip_data.get("version"),
@@ -207,21 +228,62 @@ def buscar_ip(ip):
                 "asn": ip_data.get("asn"),
                 "org": ip_data.get("org"),
                 "fecha_consulta": datetime.datetime.now().isoformat(),
-                "fuente": "ipapi.co"
+                "fuente": "ipapi.co",
+                "cache": False
             }
             
-            # Eliminar campos que son None
-            results = {k: v for k, v in results.items() if v is not None}
-            
-            return results
+            # Eliminar campos nulos/vacíos
+            return {k: v for k, v in response.items() if v not in (None, "", {})}
             
         except requests.exceptions.RequestException as e:
-            return {"error": f"Error al conectar con ipapi.co: {str(e)}"}
-        except ValueError as e:
-            return {"error": f"Error al decodificar la respuesta de ipapi.co: {str(e)}"}
+            # 6. Si falla ipapi.co, intentar con API de respaldo (ip-api.com)
+            try:
+                res_backup = requests.get(f"http://ip-api.com/json/{ip}", headers=headers, timeout=TIMEOUT)
+                res_backup.raise_for_status()
+                backup_data = res_backup.json()
+                
+                if backup_data.get("status") == "success":
+                    return {
+                        "ip": ip,
+                        "pais": backup_data.get("country"),
+                        "codigo_pais": backup_data.get("countryCode"),
+                        "region": backup_data.get("regionName"),
+                        "codigo_region": backup_data.get("region"),
+                        "ciudad": backup_data.get("city"),
+                        "codigo_postal": backup_data.get("zip"),
+                        "latitud": backup_data.get("lat"),
+                        "longitud": backup_data.get("lon"),
+                        "zona_horaria": backup_data.get("timezone"),
+                        "isp": backup_data.get("isp"),
+                        "org": backup_data.get("org"),
+                        "asn": backup_data.get("as"),
+                        "proveedor": backup_data.get("org"),
+                        "fecha_consulta": datetime.datetime.now().isoformat(),
+                        "fuente": "ip-api.com (respaldo)",
+                        "cache": False,
+                        "aviso": "Respuesta de respaldo con menos campos"
+                    }
+                else:
+                    return {
+                        "error": backup_data.get("message", "Error en API de respaldo"),
+                        "fuente": "ip-api.com"
+                    }
+                    
+            except requests.exceptions.RequestException as e_backup:
+                return {
+                    "error": "Todas las APIs fallaron",
+                    "detalles": {
+                        "ipapi.co": str(e),
+                        "ip-api.com": str(e_backup)
+                    }
+                }
     
     except Exception as e:
-        return {"error": f"Error inesperado al buscar información de la IP: {str(e)}"}
+        return {
+            "error": "Error inesperado al procesar la IP",
+            "detalle": str(e),
+            "ip_consultada": ip
+        }
 
 def buscar_numero(numero):
     """Obtiene información de un número de teléfono sin usar APIs externas"""
